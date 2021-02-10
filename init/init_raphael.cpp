@@ -4,15 +4,16 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
+#include <vector>
+
 #include <android-base/properties.h>
 #define _REALLY_INCLUDE_SYS__SYSTEM_PROPERTIES_H_
 #include <sys/_system_properties.h>
 #include <sys/sysinfo.h>
 
-#include "vendor_init.h"
-#include "property_service.h"
+using android::base::GetProperty;
 
-void property_override(char const prop[], char const value[])
+void property_override(char const prop[], char const value[], bool add = true)
 {
     prop_info *pi;
 
@@ -20,7 +21,7 @@ void property_override(char const prop[], char const value[])
 
     if (pi)
         __system_property_update(pi, value, strlen(value));
-    else
+    else if (add)
         __system_property_add(prop, strlen(prop), value, strlen(value));
 }
 
@@ -50,45 +51,84 @@ void load_dalvik_properties()
     property_override("dalvik.vm.heapminfree", "8m");
 }
 
-void load_raphael()
-{
-    property_override("ro.build.fingerprint", "Xiaomi/raphael/raphael:11/RKQ1.200826.002/V12.5.6.0.RFKCNXM:user/release-keys");
-    property_override("ro.build.product", "raphael");
-    property_override("ro.product.device", "raphael");
-    property_override("ro.product.model", "Redmi K20 Pro");
-}
+std::vector<std::string> ro_props_default_source_order = {
+    "",
+    "bootimage.",
+    "odm.",
+    "product.",
+    "system.",
+    "system_ext.",
+    "vendor.",
+};
 
-void load_raphaelglobal()
+void set_ro_build_prop(const std::string &prop, const std::string &value)
 {
-    property_override("ro.build.fingerprint", "Xiaomi/raphael/raphael:11/RKQ1.200826.002/V12.5.2.0.RFKMIXM:user/release-keys");
-    property_override("ro.build.product", "raphael");
-    property_override("ro.product.device", "raphael");
-    property_override("ro.product.model", "Mi 9T Pro");
-}
+    for (const auto &source : ro_props_default_source_order)
+    {
+        auto prop_name = "ro." + source + "build." + prop;
+        if (source == "")
+            property_override(prop_name.c_str(), value.c_str());
+        else
+            property_override(prop_name.c_str(), value.c_str(), false);
+    }
+};
 
-void load_raphaelin()
+void set_ro_product_prop(const std::string &prop, const std::string &value)
 {
-    property_override("ro.build.fingerprint", "Xiaomi/raphaelin/raphaelin:11/RKQ1.200826.002/V12.5.1.0.RFKINXM:user/release-keys");
-    property_override("ro.build.product", "raphaelin");
-    property_override("ro.product.device", "raphaelin");
-    property_override("ro.product.model", "Redmi K20 Pro");
-}
+    for (const auto &source : ro_props_default_source_order)
+    {
+        auto prop_name = "ro.product." + source + prop;
+        property_override(prop_name.c_str(), value.c_str(), false);
+    }
+};
 
 void vendor_load_properties()
 {
-    std::string region = android::base::GetProperty("ro.boot.hwc", "");
+    std::string region;
+    std::string hardware_revision;
+    region = GetProperty("ro.boot.hwc", "GLOBAL");
+    hardware_revision = GetProperty("ro.boot.hwversion", "UNKNOWN");
 
-    if (region.find("CN") != std::string::npos)
+    std::string model;
+    std::string device;
+    std::string fingerprint;
+    std::string description;
+    std::string mod_device;
+
+    if (region == "GLOBAL")
     {
-        load_raphael();
+        model = "Mi 9T Pro";
+        device = "raphael";
+        fingerprint = "Xiaomi/raphael/raphael:11/RKQ1.200826.002/V12.5.2.0.RFKMIXM:user/release-keys";
+        description = "raphael-user 11 RKQ1.200826.002 V12.5.2.0.RFKMIXM release-keys";
+        mod_device = "raphael_global";
     }
-    else if (region.find("GLOBAL") != std::string::npos)
+    else if (region == "CN")
     {
-        load_raphaelglobal();
+        model = "Redmi K20 Pro";
+        device = "raphael";
+        fingerprint = "Xiaomi/raphael/raphael:11/RKQ1.200826.002/V12.5.6.0.RFKCNXM:user/release-keys";
+        description = "raphael-user 11 RKQ1.200826.002 V12.5.6.0.RFKCNXM release-keys";
     }
-    else if (region.find("INDIA") != std::string::npos)
+    else if (region == "INDIA")
     {
-        load_raphaelin();
+        model = "Redmi K20 Pro";
+        device = "raphaelin";
+        fingerprint = "Xiaomi/raphaelin/raphaelin:11/RKQ1.200826.002/V12.5.1.0.RFKINXM:user/release-keys";
+        description = "raphaelin-user 11 RKQ1.200826.002 V12.5.1.0.RFKINXM release-keys";
+        mod_device = "raphael_in_global";
     }
+
+    set_ro_build_prop("fingerprint", fingerprint);
+    set_ro_product_prop("device", device);
+    set_ro_product_prop("model", model);
+    property_override("ro.build.description", description.c_str());
+    if (mod_device != "")
+    {
+        property_override("ro.product.mod_device", mod_device.c_str());
+    }
+
+    property_override("ro.boot.hardware.revision", hardware_revision.c_str());
+
     load_dalvik_properties();
 }
