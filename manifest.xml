@@ -737,7 +737,7 @@
         <fqname>@1.0::ITouchFeature/default</fqname>
     </hal>
     <sepolicy>
-        <version>30.0</version>
+        <version>32.0</version>
     </sepolicy>
     <kernel target-level="3"/>
 </manifest>
